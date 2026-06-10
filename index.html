@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FORGE BUILD — 3D Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles.css" />
+  <style>
+    /* ── Photoshop vertical toolbar ───────────────────────────────── */
+    #ps-toolbar {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: 48px;
+      background: #181818;
+      border-right: 1px solid #2a2a2a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 0 12px;
+      gap: 1px;
+      z-index: 800;
+      user-select: none;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    #ps-toolbar::-webkit-scrollbar { width: 0; }
+
+    #ps-toolbar .ps-sep {
+      width: 28px; height: 1px;
+      background: #2a2a2a;
+      margin: 3px 0;
+      flex-shrink: 0;
+    }
+
+    #ps-toolbar .ps-btn {
+      width: 38px; height: 38px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: #666;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.1s, color 0.1s;
+      position: relative;
+    }
+    #ps-toolbar .ps-btn svg {
+      width: 18px; height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+    #ps-toolbar .ps-btn:hover { background: #252525; color: #ddd; }
+    #ps-toolbar .ps-btn.active { background: #c0392b; color: #fff; }
+    #ps-toolbar .ps-btn.flash  { background: #444; color: #fff; }
+
+    /* Tooltip */
+    #ps-toolbar .ps-btn::after {
+      content: attr(data-tip);
+      position: fixed;
+      left: 54px;
+      background: #111;
+      color: #ccc;
+      font: 500 10px 'IBM Plex Mono', monospace;
+      white-space: nowrap;
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 9999;
+      border: 1px solid #333;
+    }
+    #ps-toolbar .ps-btn:hover::after { opacity: 1; }
+
+    /* Push everything right to make room for toolbar */
+    #app { padding-left: 48px; }
+
+    /* ── Inspector panel ──────────────────────────────────────────── */
+    #panel-inspector { display: flex; flex-direction: column; }
+    #insp-body { overflow-y: auto; flex: 1; }
+
+    .insp-empty {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 10px; padding: 28px 0;
+      color: var(--text3); font: 400 10px var(--font-mono);
+      letter-spacing: 0.05em; text-align: center; line-height: 1.6;
+    }
+
+    .insp-section {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px 10px;
+    }
+    .insp-section-hd {
+      font: 600 9px var(--font-mono);
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--accent); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .insp-mode-tag {
+      font: 700 8px var(--font-mono); letter-spacing: 0.08em;
+      background: var(--bg3); border: 1px solid var(--border2);
+      color: var(--text3); padding: 1px 6px; margin-left: auto;
+    }
+
+    .insp-name-row { padding: 6px 10px 2px; border-bottom: 1px solid var(--border); }
+    .insp-name-input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border2);
+      color: var(--text); font: 500 12px var(--font-mono);
+      padding: 5px 8px; outline: none; letter-spacing: 0.03em;
+    }
+    .insp-name-input:focus { border-color: var(--accent); }
+
+    /* Geometry stats */
+    .insp-stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 4px;
+    }
+    .insp-stat {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 6px 4px 4px; text-align: center;
+    }
+    .insp-stat-val {
+      display: block; font: 600 14px var(--font-mono);
+      color: var(--text); letter-spacing: 0.02em;
+    }
+    .insp-stat-lbl {
+      display: block; font: 400 8px var(--font-mono);
+      color: var(--text3); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-top: 2px;
+    }
+
+    /* Material row */
+    .insp-mat-row { display: flex; gap: 8px; align-items: flex-start; }
+    .insp-color-swatch {
+      width: 36px; flex-shrink: 0; padding-top: 2px;
+    }
+    .insp-color-swatch input[type="color"] {
+      width: 36px; height: 36px; border: 1px solid var(--border2);
+      cursor: pointer; padding: 2px; background: none;
+    }
+    .insp-mat-sliders { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .insp-slider-row {
+      display: flex; align-items: center; gap: 5px;
+    }
+    .insp-slider-lbl {
+      font: 400 9px var(--font-mono); color: var(--text3);
+      width: 32px; flex-shrink: 0; letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .insp-slider-val {
+      font: 400 9px var(--font-mono); color: var(--text2);
+      width: 26px; text-align: right; flex-shrink: 0;
+    }
+
+    /* Op buttons */
+    .insp-op-row {
+      display: flex; gap: 3px; margin-bottom: 3px;
+    }
+    .insp-op-btn {
+      flex: 1; display: flex; align-items: center; gap: 5px;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text2); cursor: pointer; padding: 6px 7px;
+      font: 400 10px var(--font-mono); letter-spacing: 0.03em;
+      transition: all 0.12s; white-space: nowrap;
+    }
+    .insp-op-btn svg {
+      width: 13px; height: 13px; flex-shrink: 0;
+      stroke: currentColor; fill: none;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .insp-op-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+    .insp-op-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+    .insp-op-btn.insp-op-accent { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+    .insp-op-btn.insp-op-accent:hover { background: rgba(255,51,102,0.18); }
+    .insp-op-btn.insp-op-danger { border-color: var(--red); color: var(--red); background: rgba(255,68,68,0.06); }
+    .insp-op-btn.insp-op-danger:hover { background: rgba(255,68,68,0.18); }
+    .insp-op-key {
+      margin-left: auto; font: 600 8px var(--font-mono);
+      color: var(--text3); background: var(--bg3);
+      border: 1px solid var(--border); padding: 1px 4px; flex-shrink: 0;
+    }
+    .insp-op-desc {
+      font: 400 9px var(--font-mono); color: var(--text3);
+      letter-spacing: 0.03em; margin-bottom: 6px; line-height: 1.5;
+    }
+
+    /* Extrude fill/open toggle inside face ops */
+    .insp-extrude-toggle {
+      display: flex; gap: 2px; margin-bottom: 5px;
+    }
+    .insp-extrude-btn {
+      flex: 1; padding: 4px 6px;
+      font: 600 9px var(--font-mono); letter-spacing: 0.04em;
+      text-transform: uppercase; border: 1px solid var(--border);
+      background: none; color: var(--text3); cursor: pointer;
+      transition: all 0.12s;
+    }
+    .insp-extrude-btn:hover { color: var(--text); background: var(--bg3); }
+    .insp-extrude-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+
+    /* Bool target */
+    .insp-bool-target {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+    }
+
+    /* Modifiers */
+    .insp-mod-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 2px 0 4px;
+    }
+    .insp-mod-lbl {
+      font: 400 9px var(--font-mono); color: var(--text2);
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .insp-mod-divider {
+      height: 1px; background: var(--border); margin: 6px 0;
+    }
+    .insp-apply-btn {
+      width: 100%; margin-top: 4px;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text2); cursor: pointer; padding: 5px;
+      font: 400 9px var(--font-mono); letter-spacing: 0.05em;
+      text-transform: uppercase; transition: all 0.12s;
+    }
+    .insp-apply-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
+
+    .insp-select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text2); padding: 4px 6px;
+      font: 400 9px var(--font-mono); margin-top: 2px;
+    }
+
+    .insp-stat-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 2px 0;
+    }
+
+    /* Mode-aware ops visibility — driven by JS adding class to #sidebar */
+    #sidebar.mode-object  #insp-ops-object  { display: block; }
+    #sidebar.mode-vertex  #insp-ops-vertex  { display: block; }
+    #sidebar.mode-edge    #insp-ops-edge    { display: block; }
+    #sidebar.mode-face    #insp-ops-face    { display: block; }
+    #sidebar.mode-object  #insp-ops-vertex,
+    #sidebar.mode-object  #insp-ops-edge,
+    #sidebar.mode-object  #insp-ops-face    { display: none; }
+    #sidebar.mode-vertex  #insp-ops-object,
+    #sidebar.mode-vertex  #insp-ops-edge,
+    #sidebar.mode-vertex  #insp-ops-face    { display: none; }
+    #sidebar.mode-edge    #insp-ops-object,
+    #sidebar.mode-edge    #insp-ops-vertex,
+    #sidebar.mode-edge    #insp-ops-face    { display: none; }
+    #sidebar.mode-face    #insp-ops-object,
+    #sidebar.mode-face    #insp-ops-vertex,
+    #sidebar.mode-face    #insp-ops-edge    { display: none; }
+
+    /* facepaint toolbar inside inspector */
+    #panel-inspector #facepaint-toolbar {
+      position: static !important;
+      width: 100% !important;
+      border: none !important;
+      background: none !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+    }
+    #panel-inspector #facepaint-toolbar.visible { display: flex !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Photoshop-style vertical toolbar ─────────────────────────────── -->
+  <aside id="ps-toolbar" role="toolbar" aria-label="Tools">
+
+    <!-- Mode -->
+    <button class="ps-btn" data-ps-mode="object" data-tip="Object  (Tab)">
+      <svg viewBox="0 0 24 24"><path d="M5 3l14 9-7 1-4 7z" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-mode="vertex" data-tip="Vertex  (1)">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/><circle cx="4" cy="4" r="1.6" fill="currentColor" stroke="none"/><circle cx="20" cy="4" r="1.6" fill="currentColor" stroke="none"/><circle cx="4" cy="20" r="1.6" fill="currentColor" stroke="none"/><circle cx="20" cy="20" r="1.6" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-mode="edge" data-tip="Edge  (2)">
+      <svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="2.2" fill="currentColor" stroke="none"/><circle cx="20" cy="4" r="2.2" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-mode="face" data-tip="Face  (3)">
+      <svg viewBox="0 0 24 24"><polygon points="4,20 12,4 20,20" fill="currentColor" stroke="none" opacity="0.8"/></svg>
+    </button>
+
+    <div class="ps-sep"></div>
+
+    <!-- Transform -->
+    <button class="ps-btn" data-ps-transform="translate" data-tip="Move  (G)">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/><polyline points="9,8 12,5 15,8"/><polyline points="9,16 12,19 15,16"/><polyline points="8,9 5,12 8,15"/><polyline points="16,9 19,12 16,15"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-transform="rotate" data-tip="Rotate  (R)">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3-6.3"/><polyline points="21 3 21 9 15 9"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-transform="scale" data-tip="Scale  (S)">
+      <svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5"/><line x1="5" y1="5" x2="19" y2="19"/><circle cx="12" cy="12" r="2.5"/></svg>
+    </button>
+
+    <div class="ps-sep"></div>
+
+    <!-- Mesh tools — delegate click to existing [data-tool] buttons -->
+    <button class="ps-btn" data-ps-tool="extrude"   data-tip="Extrude  (E)">
+      <svg viewBox="0 0 24 24"><rect x="5" y="12" width="14" height="7" rx="1"/><polyline points="9,12 12,5 15,12"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="inset"     data-tip="Inset  (I)">
+      <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="bevel"     data-tip="Bevel  (Ctrl+B)">
+      <svg viewBox="0 0 24 24"><path d="M5 19L19 5"/><path d="M5 19L5 13L11 19Z" fill="currentColor" stroke="none" opacity="0.45"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="loopcut"   data-tip="Loop Cut  (L)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="3 2"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="knife"     data-tip="Knife  (K)">
+      <svg viewBox="0 0 24 24"><path d="M4 20L14 10C16 8 18 7 20 8L21 10C19 12 17 13 15 14Z"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="subdivide" data-tip="Subdivide  (D)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="smooth"    data-tip="Smooth  (Alt+S)">
+      <svg viewBox="0 0 24 24"><path d="M3 17C6 6 18 6 21 17"/><path d="M6 17C8 11 16 11 18 17" opacity="0.4"/></svg>
+    </button>
+
+    <div class="ps-sep"></div>
+
+    <button class="ps-btn" data-ps-tool="merge"    data-tip="Merge  (M)">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="join"     data-tip="Join  (J)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="8" width="7" height="8" rx="1"/><rect x="14" y="8" width="7" height="8" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="dissolve" data-tip="Dissolve  (X)">
+      <svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="fill"     data-tip="Fill  (F)">
+      <svg viewBox="0 0 24 24"><polygon points="12,4 20,20 4,20" fill="currentColor" stroke="none" opacity="0.55"/><polygon points="12,4 20,20 4,20"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-tool="flip"     data-tip="Flip Normals  (N)">
+      <svg viewBox="0 0 24 24"><path d="M3 12h18M3 12l4-4M3 12l4 4M21 12l-4-4M21 12l-4 4"/></svg>
+    </button>
+
+    <div class="ps-sep"></div>
+
+    <!-- Boolean -->
+    <button class="ps-btn" data-ps-bool="union"     data-tip="Bool Union">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M12 7.5 A5 5 0 0 1 17 12 A5 5 0 0 1 12 16.5 A5 5 0 0 1 7 12 A5 5 0 0 1 12 7.5Z" fill="currentColor" stroke="none" opacity="0.3"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-bool="subtract"  data-tip="Bool Subtract">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5" fill="#181818" stroke="currentColor"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-bool="intersect" data-tip="Bool Intersect">
+      <svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/><path d="M12 7.8 A5 5 0 0 1 16.5 12 A5 5 0 0 1 12 16.2 A5 5 0 0 1 7.5 12 A5 5 0 0 1 12 7.8Z" fill="currentColor" stroke="none"/></svg>
+    </button>
+
+    <div class="ps-sep"></div>
+
+    <!-- Sculpt / FacePaint toggles -->
+    <button class="ps-btn" data-ps-sculpt-toggle data-tip="Sculpt mode">
+      <svg viewBox="0 0 24 24"><path d="M3 21C7 14 12 10 18 8"/><circle cx="19" cy="7" r="2"/><path d="M6 18Q9 13 13 11" opacity="0.4"/></svg>
+    </button>
+    <button class="ps-btn" data-ps-paint-toggle data-tip="Face Paint">
+      <svg viewBox="0 0 24 24"><path d="M5 19L11 13"/><path d="M12 4C16 4 20 8 20 12C20 16 16 20 12 20C10 20 8 19 7 18"/><circle cx="10" cy="9" r="1.5" fill="currentColor" stroke="none"/></svg>
+    </button>
+
+  </aside>
+  <!-- ──────────────────────────────────────────────────────────────────── -->
+
+  <div id="app">
+
+    <!-- Top bar -->
+    <header id="topbar">
+      <a class="brand" href="https://www.pixelforge3d.at/" style="text-decoration:none;color:inherit;">
+        <span class="brand-logo">⬡</span>
+        <span class="brand-name">FORGE<span class="brand-build">BUILD</span></span>
+      </a>
+
+      <nav class="menus" role="menubar">
+        <button class="menu-btn" data-menu="file">File</button>
+        <button class="menu-btn" data-menu="edit">Edit</button>
+        <button class="menu-btn" data-menu="add">Add</button>
+        <button class="menu-btn" data-menu="mesh">Mesh</button>
+        <button class="menu-btn" data-menu="view">View</button>
+      </nav>
+
+<div class="topbar-actions">
+        <button class="icon-btn" id="btn-undo" title="Undo (Ctrl+Z)">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 5h6a4 4 0 1 1 0 8H4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 2L5 5L2 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="rotate(180 3.5 5)"/></svg>
+          Undo
+        </button>
+        <button class="icon-btn" id="btn-redo" title="Redo (Ctrl+Shift+Z)">
+          Redo
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M12 5H6a4 4 0 1 0 0 8h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 2L9 5L12 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn" id="btn-save" title="Save Project (Ctrl+S)">💾 Save</button>
+        <button class="icon-btn" id="btn-export" title="Export STL">Export</button>
+      </div>
+    </header>
+
+    <!-- LEFT SIDEBAR: solo outliner + tool info -->
+    <aside id="sidebar">
+
+      <!-- Tool Info Panel: appare quando si passa su un tool -->
+      <div id="sidebar-tool-info">
+        <div id="sti-cat"></div>
+        <div id="sti-header">
+          <span id="sti-name">—</span>
+          <span id="sti-key"></span>
+        </div>
+        <div id="sti-desc"></div>
+        <div id="sti-tip"></div>
+      </div>
+
+      <!-- Video placeholder per ogni tool -->
+      <div id="sidebar-tool-video" style="display:none">
+        <div id="stv-label">Preview</div>
+        <div id="stv-container">
+          <video id="stv-video" loop muted autoplay playsinline>
+            <source id="stv-source" src="" type="video/mp4"/>
+          </video>
+          <div id="stv-placeholder">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#333" stroke-width="1.2"><rect x="3" y="3" width="22" height="22" rx="2"/><polygon points="11,9 21,14 11,19" fill="#333" stroke="none"/></svg>
+            <span id="stv-placeholder-name">tool_name.mp4</span>
+            <span id="stv-placeholder-hint">Add video file to<br>/assets/videos/</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tool Options Panel: active tool options -->
+      <div id="sidebar-tool-options" style="display:none">
+        <div id="sto-title">Opzioni</div>
+
+        <!-- Extrude options -->
+        <div id="sto-extrude" class="sto-group" style="display:none">
+          <div class="sto-label">Extrude Mode</div>
+          <div class="sto-toggle-row">
+            <button class="sto-btn active" id="sto-extrude-fill">⊞ Fill</button>
+            <button class="sto-btn" id="sto-extrude-open">⊡ Open</button>
+          </div>
+          <div class="sto-hint">Fill = mantiene la base · Open = shell aperto</div>
+        </div>
+
+        <!-- Face Paint options -->
+        <div id="sto-facepaint" class="sto-group" style="display:none">
+          <div class="sto-label">Brush Color</div>
+          <div class="sto-color-row">
+            <input type="color" id="facepaint-color" value="#ff3366" class="sto-color-pick"/>
+            <div class="sto-swatches">
+              <button class="fp-swatch-btn active" data-color="#ff3366" style="background:#ff3366"></button>
+              <button class="fp-swatch-btn" data-color="#4488ff" style="background:#4488ff"></button>
+              <button class="fp-swatch-btn" data-color="#00ffaa" style="background:#00ffaa"></button>
+              <button class="fp-swatch-btn" data-color="#ffaa00" style="background:#ffaa00"></button>
+              <button class="fp-swatch-btn" data-color="#cc44ff" style="background:#cc44ff"></button>
+              <button class="fp-swatch-btn" data-color="#ff4444" style="background:#ff4444"></button>
+              <button class="fp-swatch-btn" data-color="#ffffff" style="background:#fff"></button>
+              <button class="fp-swatch-btn" data-color="#111111" style="background:#111;border-color:#444"></button>
+            </div>
+          </div>
+          <button class="fp-clear-btn" id="facepaint-clear" style="width:100%;margin-top:6px">✕ Clear Colors</button>
+          <div class="sto-hint">Click a face in viewport to paint it</div>
+        </div>
+
+        <!-- Sculpt options -->
+        <div id="sto-sculpt" class="sto-group" style="display:none">
+          <div class="sto-label">Sculpt Brush</div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Radius</span>
+            <input type="range" id="sculptRadius" min="0.1" max="5" step="0.05" value="1" class="sto-slider"/>
+            <span id="sculptRadiusVal" class="sto-val">1.0</span>
+          </div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Strength</span>
+            <input type="range" id="sculptStrength" min="0.01" max="1" step="0.01" value="0.5" class="sto-slider"/>
+            <span id="sculptStrengthVal" class="sto-val">0.50</span>
+          </div>
+          <select id="sculptFalloff" class="sto-select">
+            <option value="smooth">Falloff: Smooth</option>
+            <option value="sharp">Falloff: Sharp</option>
+            <option value="linear">Falloff: Linear</option>
+          </select>
+          <div class="sto-brush-modes">
+            <button class="sto-brush active" data-sculpt="smooth">〰 Smooth</button>
+            <button class="sto-brush" data-sculpt="pull">▲ Pull</button>
+            <button class="sto-brush" data-sculpt="push">▼ Push</button>
+            <button class="sto-brush" data-sculpt="flatten">═ Flat</button>
+            <button class="sto-brush" data-sculpt="pinch">◎ Pinch</button>
+          </div>
+        </div>
+
+        <!-- Bevel options -->
+        <div id="sto-bevel" class="sto-group" style="display:none">
+          <div class="sto-label">Bevel Settings</div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Amount</span>
+            <input type="range" id="sto-bevel-amount" min="0.01" max="1" step="0.01" value="0.15" class="sto-slider"/>
+            <span id="sto-bevel-amount-val" class="sto-val">0.15</span>
+          </div>
+          <div class="sto-hint">Ctrl+B in viewport · amount = bevel distance</div>
+        </div>
+
+        <!-- Knife options -->
+        <div id="sto-knife" class="sto-group" style="display:none">
+          <div class="sto-label">Knife Settings</div>
+          <div class="sto-toggle-row">
+            <button class="sto-btn active" id="sto-knife-snap">⊙ Snap On</button>
+            <button class="sto-btn" id="sto-knife-free">✎ Free</button>
+          </div>
+          <div class="sto-hint">K in viewport · Enter = confirm · Esc = cancel</div>
+        </div>
+
+        <!-- Loop Cut options -->
+        <div id="sto-loopcut" class="sto-group" style="display:none">
+          <div class="sto-label">Loop Cut Settings</div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Offset</span>
+            <input type="range" id="sto-loop-offset" min="-0.9" max="0.9" step="0.05" value="0" class="sto-slider"/>
+            <span id="sto-loop-offset-val" class="sto-val">0.00</span>
+          </div>
+          <div class="sto-hint">L in viewport · drag to reposition the loop</div>
+        </div>
+
+        <!-- Subdivide options -->
+        <div id="sto-subdivide" class="sto-group" style="display:none">
+          <div class="sto-label">Subdivide Levels</div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Levels</span>
+            <input type="range" id="sto-subdiv-levels" min="1" max="4" step="1" value="1" class="sto-slider"/>
+            <span id="sto-subdiv-levels-val" class="sto-val">1</span>
+          </div>
+          <div class="sto-hint">Each level multiplies polygons x4</div>
+        </div>
+
+        <!-- Smooth options -->
+        <div id="sto-smooth" class="sto-group" style="display:none">
+          <div class="sto-label">Smooth Settings</div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Passes</span>
+            <input type="range" id="sto-smooth-passes" min="1" max="10" step="1" value="3" class="sto-slider"/>
+            <span id="sto-smooth-passes-val" class="sto-val">3</span>
+          </div>
+          <div class="sto-hint">Più passate = superficie più morbida</div>
+        </div>
+
+        <!-- Proportional options -->
+        <div id="sto-proportional" class="sto-group" style="display:none">
+          <div class="sto-label">Proportional Editing</div>
+          <div class="sto-slider-row">
+            <span class="sto-lbl">Radius</span>
+            <input type="range" id="propRadius" min="0.1" max="10" step="0.1" value="2" class="sto-slider"/>
+            <span id="propVal" class="sto-val">2.0</span>
+          </div>
+          <select id="propFalloff" class="sto-select">
+            <option value="smooth">Smooth</option>
+            <option value="sharp">Sharp</option>
+            <option value="linear">Linear</option>
+            <option value="sphere">Sphere</option>
+          </select>
+        </div>
+
+      </div>
+
+      <!-- Scene Outliner -->
+      <section class="panel" id="panel-outliner">
+        <div class="panel-header" data-collapse>
+          <span class="panel-icon">◈</span>
+          <h3>Scene</h3>
+          <button class="panel-add-btn" id="btn-add-obj" title="Add object">+</button>
+        </div>
+        <div id="outliner-list"></div>
+      </section>
+
+      <!-- hidden elements kept for JS compatibility -->
+      <div style="display:none">
+        <div id="panel-tools"><div class="tool-grid" id="extrude-toggle-container">
+          <button data-tool="extrude" id="btn-extrude"></button>
+          <button data-tool="inset"></button>
+          <button data-tool="bevel"></button>
+          <button data-tool="subdivide"></button>
+          <button data-tool="loopcut"></button>
+          <button data-tool="merge"></button>
+          <button data-tool="dissolve"></button>
+          <button data-tool="smooth"></button>
+          <button data-tool="knife"></button>
+          <button data-tool="join"></button>
+          <button data-tool="flip"></button>
+          <button data-tool="fill"></button>
+          <button id="extrude-with-fill"></button>
+          <button id="extrude-no-fill"></button>
+        </div></div>
+        <div id="panel-boolean"></div>
+        <div id="panel-material"></div>
+        <div id="panel-proportional"></div>
+        <div id="panel-sculpt"></div>
+        <div id="panel-facepaint"></div>
+        <div id="obj-props-panel"><div id="obj-props-body">
+          <div id="props-no-selection"></div>
+          <div id="props-content">
+            <div id="prop-segments-section" style="display:none">
+              <input id="prop-segments" type="range" min="3" max="64" value="16"/>
+              <span id="prop-segments-val">16</span>
+              <input id="prop-radius" type="range" min="0.1" max="5" value="1" step="0.05"/>
+              <span id="prop-radius-val">1.00</span>
+              <input id="prop-depth" type="range" min="0.1" max="5" value="1" step="0.05"/>
+              <span id="prop-depth-val">1.00</span>
+              <button id="prop-apply-primitive"></button>
+            </div>
+            <input type="range" id="prop-thickness" min="0" max="2" value="0" step="0.01"/>
+            <span id="prop-thickness-val">0.00</span>
+            <button id="prop-apply-thickness"></button>
+          </div>
+        </div></div>
+        <!-- kept IDs needed by UI.ts -->
+        <input type="checkbox" id="proportional"/>
+        <input type="color" id="matColor" value="#8a8a8a"/>
+        <input type="range" id="matRough" min="0" max="1" step="0.01" value="0.6"/>
+        <input type="range" id="matMetal" min="0" max="1" step="0.01" value="0.2"/>
+        <span id="roughVal">0.60</span>
+        <span id="metalVal">0.20</span>
+        <input type="checkbox" id="sculpt-enabled"/>
+        <input type="checkbox" id="facepaint-enabled"/>
+      </div>
+
+    </aside>    </aside>
+
+    <!-- Viewport -->
+    <main id="viewport">
+      <canvas id="canvas"></canvas>
+
+      <div id="selection-overlay">
+        <span id="sel-info"></span>
+      </div>
+
+      <div id="history-toast"></div>
+    </main>
+
+    <!-- RIGHT PANEL: tutto sull oggetto selezionato -->
+    <aside id="right-panel">
+
+      <!-- Stato vuoto -->
+      <div id="rp-empty-state">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="#222" stroke-width="1.2">
+          <rect x="6" y="6" width="24" height="24" rx="1"/>
+          <line x1="6" y1="18" x2="30" y2="18"/>
+          <line x1="18" y1="6" x2="18" y2="30"/>
+        </svg>
+        <span class="rp-empty-label">Select an object<br>to see its info</span>
+      </div>
+
+      <!-- Contenuto oggetto (visibile solo con selezione) -->
+      <div id="rp-content" style="display:none">
+
+        <!-- ── HEADER OGGETTO ── -->
+        <div id="rp-header">
+          <div id="rp-obj-icon">◈</div>
+          <div>
+            <div id="rp-obj-name">—</div>
+            <div id="rp-obj-type">Mesh Object</div>
+          </div>
+          <div id="rp-obj-mode-tag">OBJECT</div>
+        </div>
+
+        <!-- ── DESCRIZIONE OGGETTO ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Descrizione</div>
+          <div id="rp-obj-desc" class="rp-desc-text"></div>
+        </div>
+
+        <!-- ── GEOMETRIA ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Geometry</div>
+          <div class="rp-stats">
+            <div class="rp-stat-box">
+              <span class="rp-stat-num" id="prop-vcount">0</span>
+              <span class="rp-stat-lbl">Verts</span>
+            </div>
+            <div class="rp-stat-box">
+              <span class="rp-stat-num" id="prop-ecount">0</span>
+              <span class="rp-stat-lbl">Edges</span>
+            </div>
+            <div class="rp-stat-box">
+              <span class="rp-stat-num" id="prop-fcount">0</span>
+              <span class="rp-stat-lbl">Faces</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── NOME ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Name</div>
+          <input type="text" id="prop-name" class="rp-name-input" placeholder="Name oggetto"/>
+        </div>
+
+        <!-- ── TRANSFORM ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Transform</div>
+          <div class="transform-tabs" style="padding:0 0 6px">
+            <button class="ttab active" data-ttab="pos">POS</button>
+            <button class="ttab" data-ttab="rot">ROT</button>
+            <button class="ttab" data-ttab="scl">SCL</button>
+          </div>
+          <div class="field-group" id="ttab-pos" style="padding:0">
+            <div class="field-row"><span class="axis x">X</span><input type="number" data-t="px" step="0.1" value="0"/></div>
+            <div class="field-row"><span class="axis y">Y</span><input type="number" data-t="py" step="0.1" value="0"/></div>
+            <div class="field-row"><span class="axis z">Z</span><input type="number" data-t="pz" step="0.1" value="0"/></div>
+          </div>
+          <div class="field-group hidden" id="ttab-rot" style="padding:0">
+            <div class="field-row"><span class="axis x">X</span><input type="number" data-t="rx" step="1" value="0"/></div>
+            <div class="field-row"><span class="axis y">Y</span><input type="number" data-t="ry" step="1" value="0"/></div>
+            <div class="field-row"><span class="axis z">Z</span><input type="number" data-t="rz" step="1" value="0"/></div>
+          </div>
+          <div class="field-group hidden" id="ttab-scl" style="padding:0">
+            <div class="field-row"><span class="axis x">X</span><input type="number" data-t="sx" step="0.1" value="1"/></div>
+            <div class="field-row"><span class="axis y">Y</span><input type="number" data-t="sy" step="0.1" value="1"/></div>
+            <div class="field-row"><span class="axis z">Z</span><input type="number" data-t="sz" step="0.1" value="1"/></div>
+          </div>
+        </div>
+
+        <!-- ── MATERIALE ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Material</div>
+          <div class="insp-mat-row">
+            <div class="insp-color-swatch"><input type="color" id="rp-matColor" value="#8a8a8a" title="Colore"/></div>
+            <div class="insp-mat-sliders">
+              <div class="insp-slider-row">
+                <span class="insp-slider-lbl">Rough</span>
+                <input type="range" id="rp-matRough" min="0" max="1" step="0.01" value="0.6"/>
+                <span class="insp-slider-val" id="rp-roughVal">0.60</span>
+              </div>
+              <div class="insp-slider-row">
+                <span class="insp-slider-lbl">Metal</span>
+                <input type="range" id="rp-matMetal" min="0" max="1" step="0.01" value="0.2"/>
+                <span class="insp-slider-val" id="rp-metalVal">0.20</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── BOOLEAN ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Boolean</div>
+          <div class="insp-bool-target" id="bool-target-row">
+            <span class="insp-slider-lbl">B obj</span>
+            <select style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text2);padding:3px 5px;font:400 10px var(--font-mono);">
+              <option value="">Auto (first other)</option>
+            </select>
+          </div>
+          <div class="insp-op-row">
+            <button class="insp-op-btn" data-bool="union">
+              <svg viewBox="0 0 16 16"><circle cx="6" cy="8" r="4.5"/><circle cx="10" cy="8" r="4.5"/></svg>
+              Union
+            </button>
+            <button class="insp-op-btn" data-bool="subtract">
+              <svg viewBox="0 0 16 16"><circle cx="6" cy="8" r="4.5"/><circle cx="10" cy="8" r="4.5" fill="var(--bg)" stroke="currentColor"/></svg>
+              Subtract
+            </button>
+          </div>
+          <div class="insp-op-row">
+            <button class="insp-op-btn" data-bool="intersect" style="flex:1">
+              <svg viewBox="0 0 16 16"><circle cx="6" cy="8" r="4.5"/><circle cx="10" cy="8" r="4.5"/><path d="M8 3.6 A4.5 4.5 0 0 1 12 8 A4.5 4.5 0 0 1 8 12.4 A4.5 4.5 0 0 1 4 8 A4.5 4.5 0 0 1 8 3.6Z" fill="currentColor" stroke="none"/></svg>
+              Intersect
+            </button>
+          </div>
+          <div class="bool-note" id="bool-status"></div>
+        </div>
+
+        <!-- ── MODIFIERS ── -->
+        <div class="rp-sec">
+          <div class="rp-sec-title"><span class="rp-sec-dot"></span>Modifiers</div>
+
+          <!-- Proportional -->
+          <div class="insp-mod-row">
+            <span class="insp-mod-lbl">Proportional</span>
+            <label class="toggle-pill" style="margin-left:auto">
+              <input type="checkbox" id="proportional"/>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+          <div class="insp-slider-row">
+            <span class="insp-slider-lbl">Radius</span>
+            <input type="range" id="propRadius" min="0.1" max="10" step="0.1" value="2"/>
+            <span class="insp-slider-val" id="propVal">2.0</span>
+          </div>
+          <select id="propFalloff" class="insp-select">
+            <option value="smooth">Falloff: Smooth</option>
+            <option value="sharp">Falloff: Sharp</option>
+            <option value="linear">Falloff: Linear</option>
+            <option value="sphere">Falloff: Sphere</option>
+          </select>
+
+          <!-- Solidify -->
+          <div class="insp-mod-divider"></div>
+          <div class="insp-mod-row"><span class="insp-mod-lbl">Solidify</span></div>
+          <div class="insp-slider-row">
+            <span class="insp-slider-lbl">Thick</span>
+            <input type="range" id="prop-thickness" min="0" max="2" value="0" step="0.01"/>
+            <span class="insp-slider-val" id="prop-thickness-val">0.00</span>
+          </div>
+          <button class="insp-apply-btn" id="prop-apply-thickness">Apply Solidify</button>
+
+          <!-- Subdivide -->
+          <div class="insp-mod-divider"></div>
+          <div class="insp-mod-row"><span class="insp-mod-lbl">Subdivide</span></div>
+          <div class="insp-slider-row">
+            <span class="insp-slider-lbl">Levels</span>
+            <input type="range" id="prop-subdiv" min="0" max="4" value="0" step="1"/>
+            <span class="insp-slider-val" id="prop-subdiv-val">0</span>
+          </div>
+          <button class="insp-apply-btn" id="prop-apply-subdiv">Apply Subdivide</button>
+        </div>
+
+
+      </div><!-- /rp-content -->
+    </aside>
+
+
+    <!-- Status bar -->
+    <footer id="statusbar">
+      <span class="stat-badge" id="mode-badge">OBJECT</span>
+      <span id="stats">Verts: <b>0</b> · Edges: <b>0</b> · Faces: <b>0</b></span>
+      <span class="divider"></span>
+      <span class="hint">RMB orbit · MMB pan · Scroll zoom · G grab · G→X/Y/Z axis · Tab mode</span>
+    </footer>
+
+  </div>
+
+  <!-- Sculpt Toolbar (Photoshop-style) -->
+  <div id="sculpt-toolbar">
+    <button class="sculpt-tool-btn active" data-sculpt="smooth" title="Smooth">
+      <span>〰</span><span class="tool-label">Smooth</span>
+    </button>
+    <button class="sculpt-tool-btn" data-sculpt="pull" title="Pull (inflate)">
+      <span>▲</span><span class="tool-label">Pull</span>
+    </button>
+    <button class="sculpt-tool-btn" data-sculpt="push" title="Push (deflate)">
+      <span>▼</span><span class="tool-label">Push</span>
+    </button>
+    <button class="sculpt-tool-btn" data-sculpt="flatten" title="Flatten">
+      <span>═</span><span class="tool-label">Flat</span>
+    </button>
+    <button class="sculpt-tool-btn" data-sculpt="pinch" title="Pinch">
+      <span>◎</span><span class="tool-label">Pinch</span>
+    </button>
+    <div class="sculpt-divider"></div>
+    <button class="sculpt-tool-btn" data-sculpt="hole" title="Hole punch">
+      <span>⊗</span><span class="tool-label">Hole</span>
+    </button>
+  </div>
+
+  <!-- Sculpt Settings Panel -->
+  <div id="sculpt-settings">
+    <div class="sculpt-mode-name" id="sculpt-mode-name">SMOOTH</div>
+    <div class="sculpt-setting-row">
+      <div class="sculpt-setting-label">Radius <span id="sculptRadiusVal">1.0</span></div>
+      <input type="range" class="sculpt-slider" id="sculptRadius" min="0.1" max="5" step="0.05" value="1" />
+    </div>
+    <div class="sculpt-setting-row">
+      <div class="sculpt-setting-label">Strength <span id="sculptStrengthVal">0.50</span></div>
+      <input type="range" class="sculpt-slider" id="sculptStrength" min="0.01" max="1" step="0.01" value="0.5" />
+    </div>
+    <div class="sculpt-setting-row">
+      <div class="sculpt-setting-label">Falloff</div>
+      <select style="width:100%;background:#111;border:1px solid #333;color:#aaa;padding:3px;font:400 10px monospace;" id="sculptFalloff">
+        <option value="smooth">Smooth</option>
+        <option value="sharp">Sharp</option>
+        <option value="linear">Linear</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Face Paint Toolbar -->
+  <div id="facepaint-toolbar">
+    <input type="color" id="facepaint-color" value="#ff3366"
+      style="width:32px;height:32px;border:2px solid #444;border-radius:50%;cursor:pointer;padding:0;background:none;"
+      title="Pick color" />
+    <div class="sculpt-divider"></div>
+    <div class="fp-swatch-grid" id="facepaint-swatches">
+      <button class="fp-swatch-btn active" data-color="#ff3366" style="background:#ff3366" title="#ff3366"></button>
+      <button class="fp-swatch-btn" data-color="#4488ff" style="background:#4488ff" title="#4488ff"></button>
+      <button class="fp-swatch-btn" data-color="#00ffaa" style="background:#00ffaa" title="#00ffaa"></button>
+      <button class="fp-swatch-btn" data-color="#ffaa00" style="background:#ffaa00" title="#ffaa00"></button>
+      <button class="fp-swatch-btn" data-color="#cc44ff" style="background:#cc44ff" title="#cc44ff"></button>
+      <button class="fp-swatch-btn" data-color="#ff4444" style="background:#ff4444" title="#ff4444"></button>
+      <button class="fp-swatch-btn" data-color="#ffffff" style="background:#ffffff" title="White"></button>
+      <button class="fp-swatch-btn" data-color="#111111" style="background:#111111;border-color:#444" title="Black"></button>
+    </div>
+    <div class="sculpt-divider"></div>
+    <button class="fp-clear-btn" id="facepaint-clear">CLR</button>
+  </div>
+
+  <!-- Extrude Fill Toggle (appended to tools panel via JS) -->
+  <div id="extrude-toggle-container" style="display:none">
+    <div class="extrude-toggle">
+      <button class="extrude-toggle-btn active" id="extrude-with-fill">⊞ Fill</button>
+      <button class="extrude-toggle-btn" id="extrude-no-fill">⊡ Open</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+
+  <script>
+  // ── PS Toolbar wiring ─────────────────────────────────────────────────────
+  // Runs after DOM ready; polls for window.__editor (set in main.ts after
+  // Editor construction: window.__editor = editor).
+  // All tool actions delegate to the existing [data-tool] / [data-bool] /
+  // [data-mode] / [data-transform] buttons so there\'s zero logic duplication.
+
+  (function () {
+    const tb = document.getElementById('ps-toolbar');
+    if (!tb) return;
+
+    // ── helpers ──
+    function clickDelegate(selector) {
+      const el = document.querySelector(selector);
+      if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+    function flash(btn) {
+      btn.classList.add('flash');
+      setTimeout(() => btn.classList.remove('flash'), 280);
+    }
+
+    // ── Mode buttons ──
+    tb.querySelectorAll('[data-ps-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clickDelegate(`[data-mode="${btn.dataset.psMode}"]`);
+      });
+    });
+
+    // ── Transform buttons ──
+    tb.querySelectorAll('[data-ps-transform]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clickDelegate(`[data-transform="${btn.dataset.psTransform}"]`);
+      });
+    });
+
+    // ── Mesh tool buttons ──
+    tb.querySelectorAll('[data-ps-tool]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clickDelegate(`[data-tool="${btn.dataset.psTool}"]`);
+        flash(btn);
+      });
+    });
+
+    // ── Boolean buttons ──
+    tb.querySelectorAll('[data-ps-bool]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clickDelegate(`[data-bool="${btn.dataset.psBool}"]`);
+        flash(btn);
+      });
+    });
+
+    // ── Sculpt toggle ──
+    tb.querySelector('[data-ps-sculpt-toggle]')?.addEventListener('click', function () {
+      const chk = document.getElementById('sculpt-enabled');
+      if (chk) { chk.checked = !chk.checked; chk.dispatchEvent(new Event('change')); }
+      this.classList.toggle('active', chk?.checked ?? false);
+    });
+
+    // ── Face paint toggle ──
+    tb.querySelector('[data-ps-paint-toggle]')?.addEventListener('click', function () {
+      const chk = document.getElementById('facepaint-enabled');
+      if (chk) { chk.checked = !chk.checked; chk.dispatchEvent(new Event('change')); }
+      this.classList.toggle('active', chk?.checked ?? false);
+    });
+
+    // ── Sync active state from editor events ──
+    function syncMode(m) {
+      tb.querySelectorAll('[data-ps-mode]').forEach(b =>
+        b.classList.toggle('active', b.dataset.psMode === m));
+    }
+    function syncTransform(m) {
+      tb.querySelectorAll('[data-ps-transform]').forEach(b =>
+        b.classList.toggle('active', b.dataset.psTransform === m));
+    }
+
+    // Mirror active state from existing mode-btn clicks (works without __editor)
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => syncMode(btn.dataset.mode));
+    });
+    document.querySelectorAll('[data-transform]').forEach(btn => {
+      btn.addEventListener('click', () => syncTransform(btn.dataset.transform));
+    });
+
+    // Poll for editor (set window.__editor = editor in main.ts)
+    const poll = setInterval(() => {
+      const ed = window.__editor;
+      if (!ed) return;
+      clearInterval(poll);
+      ed.on('mode',      syncMode);
+      ed.on('transform', syncTransform);
+      syncMode(ed.mode);
+      syncTransform(ed.transformMode ?? 'translate');
+    }, 150);
+
+    // Initial state
+    syncMode('object');
+    syncTransform('translate');
+  })();
+  </script>
+
+  <!-- FORGE BUILD — UI v4 -->
+  <script>
+  (function () {
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOL DATA
+    // ═══════════════════════════════════════════════════════════════════
+    const TOOLS = {
+      object:    { name:'Object Mode',    key:'Tab',    cat:'EDIT MODE',
+        desc:'Select and transform whole objects. Click to select, Ctrl+Click for multi-select.',
+        tip:'G = move · R = rotate · S = scale · Add X/Y/Z to lock axis · Ctrl+D = duplicate' },
+      vertex:    { name:'Vertex Mode',    key:'1',      cat:'EDIT MODE',
+        desc:'Edit individual vertices. Click to select, Shift+Click to add to selection.',
+        tip:'B = box select · Alt+Click = vertex loop · M = merge · F = fill · X = dissolve' },
+      edge:      { name:'Edge Mode',      key:'2',      cat:'EDIT MODE',
+        desc:'Select and edit edges. Ideal for loop cut, bevel and knife.',
+        tip:'Alt+Click = full edge loop · L = loop cut · B = bevel · K = knife · X = dissolve' },
+      face:      { name:'Face Mode',      key:'3',      cat:'EDIT MODE',
+        desc:'Work on faces. Ideal for Extrude, Inset and Subdivide.',
+        tip:'E = extrude · I = inset · D = subdivide · N = flip normals · Shift+Click = multi' },
+      translate: { name:'Move',           key:'G',      cat:'TRANSFORM',
+        desc:'Move the selection. Press X, Y or Z after G to lock to an axis.',
+        tip:'G Z 2 = move 2 units on Z · Ctrl = grid snap · Esc = cancel' },
+      rotate:    { name:'Rotate',         key:'R',      cat:'TRANSFORM',
+        desc:'Rotate the selection. Constrain with X, Y, Z. Type a number for precise angle.',
+        tip:'R Y 45 = rotate 45 deg on Y · R R = free rotation on view axis' },
+      scale:     { name:'Scale',          key:'S',      cat:'TRANSFORM',
+        desc:'Scale the selection. Constrain with X, Y, Z for a single axis.',
+        tip:'S Z 0 = flatten on XY · S Shift+Z = scale on X and Y only' },
+      extrude:   { name:'Extrude',        key:'E',      cat:'MESH TOOL',
+        desc:'Extrudes selected faces outward creating new connected geometry.',
+        tip:'Fill = keeps base closed · Open = creates an open shell' },
+      inset:     { name:'Inset',          key:'I',      cat:'MESH TOOL',
+        desc:'Creates a smaller inner face by shrinking edges toward center.',
+        tip:'Inset + Extrude = precise details like windows and recessed panels' },
+      bevel:     { name:'Bevel',          key:'Ctrl+B', cat:'MESH TOOL',
+        desc:'Adds intermediate edges to soften sharp borders.',
+        tip:'More segments = smoother and more realistic bevel result' },
+      subdivide: { name:'Subdivide',      key:'D',      cat:'MESH TOOL',
+        desc:'Divides each face into 4 smaller parts, increasing mesh resolution.',
+        tip:'Each level multiplies polygons x4. Use with Smooth for organic surfaces.' },
+      loopcut:   { name:'Loop Cut',       key:'L',      cat:'MESH TOOL',
+        desc:'Adds a continuous edge ring running around the entire mesh.',
+        tip:'Slide before confirming to reposition the loop cut' },
+      knife:     { name:'Knife',          key:'K',      cat:'MESH TOOL',
+        desc:'Cuts the mesh along a free-drawn line creating new edges.',
+        tip:'Enter = confirm · Esc = cancel · Snap = snaps to existing vertices' },
+      smooth:    { name:'Smooth',         key:'Alt+S',  cat:'MESH TOOL',
+        desc:'Smooths vertices by averaging position with adjacent vertices.',
+        tip:'More passes = smoother surface. Works best with many vertices selected.' },
+      merge:     { name:'Merge',          key:'M',      cat:'MESH TOOL',
+        desc:'Merges multiple vertices into one point. Closes holes and joins geometry.',
+        tip:'At Center = midpoint · At First/Last = uses first or last vertex position' },
+      join:      { name:'Join',           key:'J',      cat:'MESH TOOL',
+        desc:'Combines two separate objects into one shared mesh object.',
+        tip:'Ctrl+Click both in outliner to select them, then Join' },
+      dissolve:  { name:'Dissolve',       key:'X',      cat:'MESH TOOL',
+        desc:'Removes elements without holes, rebuilding surrounding topology.',
+        tip:'Unlike Delete: leaves no holes. Use to simplify dense geometry.' },
+      fill:      { name:'Fill Face',      key:'F',      cat:'MESH TOOL',
+        desc:'Creates a face by connecting selected border vertices.',
+        tip:'Select at least 3 vertices on an open border then F creates the face' },
+      flip:      { name:'Flip Normals',   key:'N',      cat:'MESH TOOL',
+        desc:'Flips normal direction. Normals decide which side of a face is visible.',
+        tip:'Black face = inverted normal. Flip corrects it immediately.' },
+      union:     { name:'Bool Union',     key:'—',      cat:'BOOLEAN',
+        desc:'Combines two objects by merging their volumes. Result = A + B.',
+        tip:'Select A, right-click B in outliner to set as target, then Union' },
+      subtract:  { name:'Bool Subtract',  key:'—',      cat:'BOOLEAN',
+        desc:'Subtracts shape B from A. Creates cavities and holes in A.',
+        tip:'B is removed from the scene after the subtraction operation' },
+      intersect: { name:'Bool Intersect', key:'—',      cat:'BOOLEAN',
+        desc:'Keeps only geometry where A and B overlap.',
+        tip:'Result = only the shared part between the two objects' },
+      sculpt:    { name:'Sculpt Mode',    key:'—',      cat:'SCULPT/PAINT',
+        desc:'Deforms the mesh by painting directly on its surface like digital clay.',
+        tip:'Pull = raise · Push = lower · Smooth = smooth · Flatten = flatten' },
+      paint:     { name:'Face Paint',     key:'—',      cat:'SCULPT/PAINT',
+        desc:'Paint colors directly onto the faces of the mesh.',
+        tip:'Click a face in viewport to paint it with the selected color' },
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CURSORI MOUSE per ogni tool
+    // ═══════════════════════════════════════════════════════════════════
+    const CURSORS = {
+      object:    'default',
+      vertex:    'crosshair',
+      edge:      'crosshair',
+      face:      'crosshair',
+      translate: 'move',
+      rotate:    'grab',
+      scale:     'ew-resize',
+      extrude:   'ns-resize',
+      inset:     'cell',
+      bevel:     'col-resize',
+      subdivide: 'zoom-in',
+      loopcut:   'col-resize',
+      knife:     'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\'><text y=\'16\' font-size=\'16\'>✂</text></svg>") 4 16, crosshair',
+      smooth:    'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\'><circle cx=\'10\' cy=\'10\' r=\'8\' fill=\'none\' stroke=\'white\' stroke-width=\'1.5\'/></svg>") 10 10, crosshair',
+      merge:     'cell',
+      dissolve:  'not-allowed',
+      fill:      'copy',
+      flip:      'n-resize',
+      join:      'copy',
+      sculpt:    'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\'><circle cx=\'12\' cy=\'12\' r=\'10\' fill=\'none\' stroke=\'%23FF3366\' stroke-width=\'2\'/></svg>") 12 12, crosshair',
+      paint:     'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'20\' height=\'20\'><text y=\'16\' font-size=\'16\'>🖌</text></svg>") 2 18, crosshair',
+    };
+
+    const viewport = document.getElementById('viewport');
+    function setViewportCursor(toolId) {
+      if (!viewport) return;
+      viewport.style.cursor = CURSORS[toolId] || 'default';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOL INFO nella sidebar — hover
+    // ═══════════════════════════════════════════════════════════════════
+    const toolInfoEl = document.getElementById('sidebar-tool-info');
+    const stiCat  = document.getElementById('sti-cat');
+    const stiName = document.getElementById('sti-name');
+    const stiKey  = document.getElementById('sti-key');
+    const stiDesc = document.getElementById('sti-desc');
+    const stiTip  = document.getElementById('sti-tip');
+    let stiTimer  = null;
+
+    function showToolInfo(tid) {
+      const d = TOOLS[tid];
+      if (!d || !toolInfoEl) return;
+      clearTimeout(stiTimer);
+      if (stiCat)  stiCat.textContent  = d.cat || '';
+      if (stiName) stiName.textContent = d.name;
+      if (stiKey)  stiKey.textContent  = d.key !== '—' ? d.key : '';
+      if (stiDesc) stiDesc.textContent = d.desc;
+      if (stiTip)  { stiTip.textContent = d.tip || ''; stiTip.style.display = d.tip ? '' : 'none'; }
+      toolInfoEl.classList.add('visible');
+    }
+    function hideToolInfo() {
+      clearTimeout(stiTimer);
+      stiTimer = setTimeout(() => toolInfoEl && toolInfoEl.classList.remove('visible'), 100);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // TOOL OPTIONS nella sidebar — attivo quando tool è cliccato
+    // ═══════════════════════════════════════════════════════════════════
+    const toolOptionsEl = document.getElementById('sidebar-tool-options');
+    const stoTitle      = document.getElementById('sto-title');
+
+    const TOOL_OPTIONS_MAP = {
+      extrude:   'sto-extrude',
+      paint:     'sto-facepaint',
+      sculpt:    'sto-sculpt',
+      bevel:     'sto-bevel',
+      knife:     'sto-knife',
+      loopcut:   'sto-loopcut',
+      subdivide: 'sto-subdivide',
+      smooth:    'sto-smooth',
+      translate: 'sto-proportional',
+      rotate:    'sto-proportional',
+      scale:     'sto-proportional',
+    };
+
+    let currentOptionsTool = null;
+
+    function showToolOptions(tid) {
+      if (!toolOptionsEl) return;
+      const groupId = TOOL_OPTIONS_MAP[tid];
+      if (!groupId) {
+        toolOptionsEl.style.display = 'none';
+        currentOptionsTool = null;
+        return;
+      }
+      // Hide all groups
+      document.querySelectorAll('.sto-group').forEach(g => g.style.display = 'none');
+      // Show relevant group
+      const grp = document.getElementById(groupId);
+      if (grp) grp.style.display = '';
+      // Update title
+      const d = TOOLS[tid];
+      if (stoTitle && d) stoTitle.textContent = d.name + ' — Opzioni';
+      toolOptionsEl.style.display = '';
+      currentOptionsTool = tid;
+    }
+
+    // ── Extrude fill/open ──
+    document.getElementById('sto-extrude-fill')?.addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('sto-extrude-open')?.classList.remove('active');
+      // Mirror to hidden extrude-with-fill button
+      document.getElementById('extrude-with-fill')?.click();
+    });
+    document.getElementById('sto-extrude-open')?.addEventListener('click', function() {
+      this.classList.add('active');
+      document.getElementById('sto-extrude-fill')?.classList.remove('active');
+      document.getElementById('extrude-no-fill')?.click();
+    });
+
+    // ── Bevel amount ──
+    const bevelSlider = document.getElementById('sto-bevel-amount');
+    const bevelVal    = document.getElementById('sto-bevel-amount-val');
+    bevelSlider?.addEventListener('input', () => {
+      if (bevelVal) bevelVal.textContent = parseFloat(bevelSlider.value).toFixed(2);
+    });
+
+    // ── Loop cut offset ──
+    const loopSlider = document.getElementById('sto-loop-offset');
+    const loopVal    = document.getElementById('sto-loop-offset-val');
+    loopSlider?.addEventListener('input', () => {
+      if (loopVal) loopVal.textContent = parseFloat(loopSlider.value).toFixed(2);
+    });
+
+    // ── Subdivide levels ──
+    const subdivSlider = document.getElementById('sto-subdiv-levels');
+    const subdivVal    = document.getElementById('sto-subdiv-levels-val');
+    subdivSlider?.addEventListener('input', () => {
+      if (subdivVal) subdivVal.textContent = subdivSlider.value;
+    });
+
+    // ── Smooth passes ──
+    const smoothSlider = document.getElementById('sto-smooth-passes');
+    const smoothVal    = document.getElementById('sto-smooth-passes-val');
+    smoothSlider?.addEventListener('input', () => {
+      if (smoothVal) smoothVal.textContent = smoothSlider.value;
+    });
+
+    // ── Sculpt brush buttons ──
+    document.querySelectorAll('.sto-brush').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sto-brush').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const mode = btn.dataset.sculpt;
+        const ed = window.__forge_editor;
+        if (ed && ed.sculptTool) ed.sculptTool.settings.mode = mode;
+        // Also sync sculpt toolbar
+        document.querySelectorAll('[data-sculpt]').forEach(b =>
+          b.classList.toggle('active', b.dataset.sculpt === mode));
+      });
+    });
+
+    // ── Sculpt sliders sync ──
+    document.getElementById('sculptRadius')?.addEventListener('input', function() {
+      const v = parseFloat(this.value);
+      const val = document.getElementById('sculptRadiusVal');
+      if (val) val.textContent = v.toFixed(1);
+      const ed = window.__forge_editor;
+      if (ed?.sculptTool) ed.sculptTool.settings.radius = v;
+    });
+    document.getElementById('sculptStrength')?.addEventListener('input', function() {
+      const v = parseFloat(this.value);
+      const val = document.getElementById('sculptStrengthVal');
+      if (val) val.textContent = v.toFixed(2);
+      const ed = window.__forge_editor;
+      if (ed?.sculptTool) ed.sculptTool.settings.strength = v;
+    });
+
+    // ── Proportional radius sync ──
+    document.getElementById('propRadius')?.addEventListener('input', function() {
+      const v = parseFloat(this.value);
+      const val = document.getElementById('propVal');
+      if (val) val.textContent = v.toFixed(1);
+      const ed = window.__forge_editor;
+      if (ed) ed.proportional.radius = v;
+    });
+    document.getElementById('propFalloff')?.addEventListener('change', function() {
+      const ed = window.__forge_editor;
+      if (ed) ed.proportional.falloff = this.value;
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // VIDEO PLACEHOLDER
+    // ═══════════════════════════════════════════════════════════════════
+    const videoEl   = document.getElementById('stv-video');
+    const sourceEl  = document.getElementById('stv-source');
+    const labelEl   = document.getElementById('stv-label');
+    const phName    = document.getElementById('stv-placeholder-name');
+    const videoDiv  = document.getElementById('sidebar-tool-video');
+    const phEl      = document.getElementById('stv-placeholder');
+
+    function showToolVideo(tid) {
+      if (!videoDiv) return;
+      const d = TOOLS[tid];
+      // Check if video URL is registered (from videoAssets.ts via window.TOOL_VIDEOS)
+      const registeredUrl = (window.TOOL_VIDEOS && window.TOOL_VIDEOS[tid]) || '';
+      const filename = tid + '.mp4';
+      const path = registeredUrl || ('/assets/videos/' + filename);
+      if (phName)  phName.textContent  = filename;
+      if (labelEl) labelEl.textContent = (d ? d.name : tid) + ' — Preview';
+      // Update placeholder hint
+      const phHint = document.getElementById('stv-placeholder-hint');
+      if (phHint) phHint.innerHTML = registeredUrl
+        ? 'Video loaded'
+        : 'Place <b>' + filename + '</b><br>in <b>src/assets/videos/</b>';
+      videoDiv.style.display = '';
+      if (videoEl && sourceEl) {
+        sourceEl.src = path;
+        videoEl.load();
+        videoEl.style.display = 'none';
+        if (phEl) phEl.style.display = '';
+        videoEl.oncanplay = () => {
+          videoEl.style.display = '';
+          if (phEl) phEl.style.display = 'none';
+        };
+        videoEl.onerror = () => {
+          videoEl.style.display = 'none';
+          if (phEl) phEl.style.display = '';
+        };
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BIND toolbar sinistra — hover info + click azione + opzioni
+    // ═══════════════════════════════════════════════════════════════════
+    const psToolbar = document.getElementById('ps-toolbar');
+    if (psToolbar) {
+      psToolbar.querySelectorAll('.ps-btn').forEach(btn => {
+        let tid = btn.dataset.psMode || btn.dataset.psTransform || btn.dataset.psTool || btn.dataset.psBool;
+        const t = (btn.dataset.tip || '').toLowerCase();
+        if (!tid && t.includes('sculpt')) tid = 'sculpt';
+        if (!tid && t.includes('paint'))  tid = 'paint';
+
+        // hover: mostra info
+        if (tid) {
+          btn.addEventListener('mouseenter', () => showToolInfo(tid));
+          btn.addEventListener('mouseleave', hideToolInfo);
+        }
+
+        // click: execute action + show options + visual feedback
+        btn.addEventListener('click', () => {
+          if (tid) {
+            hideToolInfo();
+            showToolOptions(tid);
+            setViewportCursor(tid);
+            showToolVideo(tid);
+            // Visual feedback
+            document.querySelectorAll('.ps-btn').forEach(b => b.classList.remove('ps-tool-active'));
+            btn.classList.add('ps-tool-active');
+            btn.classList.add('ps-tool-flash');
+            setTimeout(() => btn.classList.remove('ps-tool-flash'), 350);
+          }
+
+          const ed = window.__forge_editor;
+          if (!ed) return;
+
+          // Mode
+          if (btn.dataset.psMode) {
+            ed.setMode(btn.dataset.psMode);
+            return;
+          }
+          // Transform
+          if (btn.dataset.psTransform) {
+            ed.setTransformMode(btn.dataset.psTransform);
+            return;
+          }
+          // Mesh tools — chiama direttamente la funzione tramite il bottone nascosto
+          if (btn.dataset.psTool) {
+            const hidden = document.querySelector('[data-tool="' + btn.dataset.psTool + '"]');
+            if (hidden) { hidden.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }
+          }
+          // Boolean
+          if (btn.dataset.psBool) {
+            const hidden = document.querySelector('[data-bool="' + btn.dataset.psBool + '"]');
+            if (hidden) { hidden.dispatchEvent(new MouseEvent('click', { bubbles: true })); return; }
+          }
+          // Sculpt toggle
+          if (btn.hasAttribute('data-ps-sculpt-toggle')) {
+            const chk = document.getElementById('sculpt-enabled');
+            if (chk) { chk.checked = !chk.checked; chk.dispatchEvent(new Event('change')); }
+            btn.classList.toggle('active', chk?.checked ?? false);
+            return;
+          }
+          // Paint toggle
+          if (btn.hasAttribute('data-ps-paint-toggle')) {
+            const chk = document.getElementById('facepaint-enabled');
+            if (chk) { chk.checked = !chk.checked; chk.dispatchEvent(new Event('change')); }
+            btn.classList.toggle('active', chk?.checked ?? false);
+            return;
+          }
+        });
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // RIGHT PANEL — oggetto selezionato
+    // ═══════════════════════════════════════════════════════════════════
+    const OBJ_INFO = {
+      cube:       { icon:'⬜', type:'Cube',       desc:'6-face solid. Foundation for architectural objects and angular shapes.' },
+      sphere:     { icon:'○',  type:'UV Sphere',   desc:'Sphere with meridians and parallels. Great for planets and round organic objects.' },
+      cylinder:   { icon:'⬡',  type:'Cylinder',   desc:'Cylindrical solid with caps. Perfect for columns, containers and tubular shapes.' },
+      cone:       { icon:'△',  type:'Cone',       desc:'Circular base tapering to a point. Good for arrows and pointed shapes.' },
+      torus:      { icon:'◎',  type:'Torus',       desc:'Donut shape. Great for rings, handles and toroidal tubes.' },
+      plane:      { icon:'▭',  type:'Plane',      desc:'Flat surface. Good for terrain, floors and walls.' },
+      gem:        { icon:'◇',  type:'Gem',      desc:'Faceted shape. Good for crystals, diamonds and decorative geometry.' },
+      octahedron: { icon:'⬡',  type:'Octahedron',  desc:'8 triangular faces. Good for 3D symbols and low-poly spheres.' },
+      icosphere:  { icon:'●',  type:'Icosphere',   desc:'Uniformly distributed polygons. Great for sculpting and organic objects.' },
+    };
+
+    function updateRightPanel() {
+      const ed = window.__forge_editor;
+      if (!ed) return;
+      const obj  = ed.sceneMgr?.active;
+      const mode = ed.mode || 'object';
+
+      const emptyEl   = document.getElementById('rp-empty-state');
+      const contentEl = document.getElementById('rp-content');
+      if (!obj) {
+        if (emptyEl)   emptyEl.style.display   = '';
+        if (contentEl) contentEl.style.display = 'none';
+        return;
+      }
+      if (emptyEl)   emptyEl.style.display   = 'none';
+      if (contentEl) contentEl.style.display = '';
+
+      // Header
+      const n = (obj.name || '').toLowerCase();
+      let info = { icon:'◈', type:'Mesh', desc:'Custom mesh object. Enter edit mode to modify it.' };
+      for (const [k, v] of Object.entries(OBJ_INFO)) { if (n.includes(k)) { info = v; break; } }
+
+      const modeColors = { object:'#FF3366', vertex:'#ff5555', edge:'#4488ff', face:'#00cc88' };
+      const mc = modeColors[mode] || '#FF3366';
+
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      const setStyle = (id, prop, val) => { const el = document.getElementById(id); if (el) el.style[prop] = val; };
+
+      set('rp-obj-icon', info.icon);
+      set('rp-obj-name', (obj.name || '').toUpperCase());
+      set('rp-obj-type', info.type);
+      set('rp-obj-desc', info.desc);
+      set('rp-obj-mode-tag', mode.toUpperCase());
+      setStyle('rp-obj-mode-tag', 'color', mc);
+      setStyle('rp-obj-mode-tag', 'borderColor', mc);
+
+      // Geometry
+      if (obj.data) {
+        set('prop-vcount', obj.data.vertices?.length ?? '—');
+        set('prop-ecount', obj.data.getEdges?.()?.length ?? '—');
+        set('prop-fcount', obj.data.faces?.length ?? '—');
+      }
+
+      // Sync materiale
+      const mat = obj.mesh?.material;
+      if (mat?.isMeshStandardMaterial) {
+        const mc2 = document.getElementById('rp-matColor');
+        const mr2 = document.getElementById('rp-matRough');
+        const mm2 = document.getElementById('rp-matMetal');
+        const rv2 = document.getElementById('rp-roughVal');
+        const mv2 = document.getElementById('rp-metalVal');
+        if (mc2) mc2.value = '#' + mat.color.getHexString();
+        if (mr2) mr2.value = mat.roughness;
+        if (mm2) mm2.value = mat.metalness;
+        if (rv2) rv2.textContent = mat.roughness.toFixed(2);
+        if (mv2) mv2.textContent = mat.metalness.toFixed(2);
+      }
+    }
+
+    // Material right panel
+    function bindRpMaterial() {
+      const mc = document.getElementById('rp-matColor');
+      const mr = document.getElementById('rp-matRough');
+      const mm = document.getElementById('rp-matMetal');
+      const rv = document.getElementById('rp-roughVal');
+      const mv = document.getElementById('rp-metalVal');
+      if (!mc) return;
+      function applyMat() {
+        const ed = window.__forge_editor;
+        if (!ed) return;
+        const o = ed.sceneMgr?.active;
+        if (!o) return;
+        const mat = o.mesh?.material;
+        if (!mat?.isMeshStandardMaterial) return;
+        mat.color.setStyle(mc.value);
+        mat.roughness = parseFloat(mr.value);
+        mat.metalness = parseFloat(mm.value);
+        mat.needsUpdate = true;
+        if (rv) rv.textContent = parseFloat(mr.value).toFixed(2);
+        if (mv) mv.textContent = parseFloat(mm.value).toFixed(2);
+      }
+      mc.addEventListener('input', applyMat);
+      if (mr) mr.addEventListener('input', applyMat);
+      if (mm) mm.addEventListener('input', applyMat);
+    }
+    bindRpMaterial();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // INIT — poll editor
+    // ═══════════════════════════════════════════════════════════════════
+    const poll = setInterval(() => {
+      const ed = window.__editor || window.__forge_editor;
+      if (!ed?.sceneMgr) return;
+      clearInterval(poll);
+      window.__editor = ed;
+      window.__forge_editor = ed;
+      ed.on('scene',     updateRightPanel);
+      ed.on('selection', updateRightPanel);
+      ed.on('mode',      (m) => {
+        updateRightPanel();
+        // Update cursor based on mode
+        setViewportCursor(m);
+      });
+      ed.on('transform', (t) => {
+        updateRightPanel();
+        setViewportCursor(t);
+        showToolOptions(t);
+      });
+      updateRightPanel();
+    }, 100);
+
+    // Toolbar active state sync
+    const tb = document.getElementById('ps-toolbar');
+    // ── Tool availability per mode ──────────────────────────────────────
+    // Each mode defines which tool groups are enabled
+    const MODE_TOOLS = {
+      object:  {
+        // transform always on, mesh tools off, bool on, sculpt/paint off
+        transform: true, mesh: false, bool: true, sculpt: false, paint: false,
+        // specific mesh tools allowed in object mode
+        allow: ['subdivide', 'join', 'smooth'],
+      },
+      vertex:  {
+        transform: true, mesh: true, bool: false, sculpt: false, paint: false,
+        allow: ['merge', 'smooth', 'dissolve', 'bevel', 'fill', 'knife'],
+      },
+      edge:    {
+        transform: true, mesh: true, bool: false, sculpt: false, paint: false,
+        allow: ['loopcut', 'bevel', 'knife', 'dissolve', 'smooth'],
+      },
+      face:    {
+        transform: true, mesh: true, bool: false, sculpt: false, paint: false,
+        allow: ['extrude', 'inset', 'subdivide', 'flip', 'smooth', 'dissolve', 'fill', 'knife'],
+      },
+    };
+
+    function applyModeDisable(m) {
+      const rules = MODE_TOOLS[m] || MODE_TOOLS.object;
+      const tb2 = document.getElementById('ps-toolbar');
+      if (!tb2) return;
+
+      tb2.querySelectorAll('.ps-btn').forEach(btn => {
+        let disabled = false;
+
+        // mesh tools
+        if (btn.dataset.psTool) {
+          const tid = btn.dataset.psTool;
+          disabled = !rules.allow.includes(tid);
+        }
+        // bool tools
+        if (btn.hasAttribute('data-ps-bool')) {
+          disabled = !rules.bool;
+        }
+        // sculpt
+        if (btn.hasAttribute('data-ps-sculpt-toggle')) {
+          disabled = !rules.sculpt && m !== 'object';
+        }
+        // paint
+        if (btn.hasAttribute('data-ps-paint-toggle')) {
+          disabled = m !== 'face';
+        }
+
+        btn.classList.toggle('ps-btn-disabled', disabled);
+        btn.style.pointerEvents = disabled ? 'none' : '';
+      });
+    }
+
+    function syncMode(m) {
+      tb?.querySelectorAll('[data-ps-mode]').forEach(b =>
+        b.classList.toggle('active', b.dataset.psMode === m));
+      setViewportCursor(m);
+      applyModeDisable(m);
+    }
+    function syncTransform(m) {
+      tb?.querySelectorAll('[data-ps-transform]').forEach(b =>
+        b.classList.toggle('active', b.dataset.psTransform === m));
+      setViewportCursor(m);
+      showToolOptions(m);
+    }
+    document.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => syncMode(btn.dataset.mode));
+    });
+    document.querySelectorAll('[data-transform]').forEach(btn => {
+      btn.addEventListener('click', () => syncTransform(btn.dataset.transform));
+    });
+    const poll2 = setInterval(() => {
+      const ed = window.__forge_editor;
+      if (!ed) return;
+      clearInterval(poll2);
+      ed.on('mode',      syncMode);
+      ed.on('transform', syncTransform);
+      syncMode(ed.mode);
+      syncTransform(ed.transformMode ?? 'translate');
+    }, 150);
+    syncMode('object');
+    syncTransform('translate');
+
+  })();
+  </script>
+</body>
+</html>
